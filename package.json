@@ -35,7 +35,7 @@
     "dist"
   ],
   "description": "Translation tools to extract/generate/compile translation files for your Svelte App (must be used with the package [svelte-translate](https://github.com/noelmugnier/svelte-translate)) at build time.",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/noelmugnier/svelte-translate-tools.git"
