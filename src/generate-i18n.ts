@@ -2,7 +2,6 @@ const fs = require("fs-extra");
 const glob = require("glob");
 const path = require("path");
 const xliff = require('xliff');
-const minimist = require('minimist');
 import type { Generatei18nOptions, LanguageTranslations, OutputFormat } from "./types";
 
 export const generatei18n = async (options?: Generatei18nOptions):Promise<any> => {
@@ -14,15 +13,6 @@ export const generatei18n = async (options?: Generatei18nOptions):Promise<any> =
   options.destinationFolder = path.resolve(options.destinationFolder || './public/lang');
 
   await executeGeneration(options);
-}
-
-export const node_process = async (): Promise<any> =>  {
-  let args = minimist(process.argv.slice(2));
-  let outputFormat = args.o || 'xlf';
-  let translationsFolder = path.resolve(args.f || './src/lang');
-  let destinationFolder = path.resolve(args.d || './public/lang');
-
-  await executeGeneration({ outputFormat, translationsFolder, destinationFolder });
 }
 
 /**

@@ -4,10 +4,9 @@ const path = require("path");
 const {parse} = require('svelte/compiler');
 const lodash = require('lodash');
 const xliff = require('xliff');
-const minimist = require('minimist');
+import type { Attribute, TemplateNode } from "svelte/types/compiler/interfaces";
 
 import type { Extracti18nOptions, IdKeys, OutputFormat, Translation } from "./types";
-import type { Attribute, TemplateNode } from "svelte/types/compiler/interfaces";
 
 export const extracti18n = async (options?: Extracti18nOptions) : Promise<any> => {
   if (!options)
@@ -23,20 +22,6 @@ export const extracti18n = async (options?: Extracti18nOptions) : Promise<any> =
     return;
 
   await executeExtraction(options);
-}
-
-export const node_process = async () : Promise<any> => {
-  let args = minimist(process.argv.slice(2));
-  let defaultLanguage = args.d || 'en';
-  let outputFormat = args.o || 'xlf';
-  let translationsFolder = path.resolve(args.f || './src/lang');
-  let src = path.resolve(args.s || './src');
-  let languages = args.l ? args.l.split(',') : [];
-
-  if (languages.length < 1)
-    return;
-  
-  await executeExtraction({ languages, defaultLanguage, outputFormat, translationsFolder, src });
 }
 
 /**
