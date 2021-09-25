@@ -29,6 +29,7 @@ const executeGeneration = async (options) : Promise<any> => {
 
     if(!files || files.length < 1)
     {
+      console.log('No translation files found.');
       return;
     }
 

@@ -37,6 +37,7 @@ const executeExtraction = async (options: Extracti18nOptions) : Promise<any> => 
     }
 
     if (!files || files.length < 1) {
+      console.log('No svelte files found.');
       return;
     }
 
