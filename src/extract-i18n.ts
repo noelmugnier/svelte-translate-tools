@@ -6,7 +6,8 @@ const lodash = require('lodash');
 const xliff = require('xliff');
 import type { Attribute, TemplateNode } from "svelte/types/compiler/interfaces";
 
-import type { Extracti18nOptions, IdKeys, OutputFormat, Translation } from "./types";
+import { getIdAndObjectKeysFromAttribute } from "./helpers";
+import type { Extracti18nOptions, IdKeys, OutputFormat, TranslationTag } from "./types";
 
 export const extracti18n = async (options?: Extracti18nOptions) : Promise<any> => {
   if (!options)
@@ -41,7 +42,7 @@ const executeExtraction = async (options: Extracti18nOptions) : Promise<any> => 
       return;
     }
 
-    let translations = await Promise.all(files.map((filePath: string) => extractComponentTranslations(path.resolve(filePath))));
+    const translations = await Promise.all(files.map((filePath: string) => extractComponentTranslations(path.resolve(filePath))));
     const { sources, targets } = initSourcesAndTargetsTranslations(translations[0]);
     
     await writeLanguagesTranslations(options.defaultLanguage, options.languages, sources, targets, options.translationsFolder, options.outputFormat);
@@ -51,16 +52,16 @@ const executeExtraction = async (options: Extracti18nOptions) : Promise<any> => 
 /**
  * Processes .svelte file and parse AST tree to find node with attribute use:i18n and extract its text value.
  */
-const extractComponentTranslations = async (filePath: string) : Promise<Translation[]> => {
+const extractComponentTranslations = async (filePath: string) : Promise<TranslationTag[]> => {
   try {
     const srcCode = await fs.readFile(filePath, { encoding: "utf-8" });    
     let newContent = srcCode;
-    let scriptMatched = /(?<script>.*\<script.*\<\/script\>)/gs.exec(srcCode);
+    const scriptMatched = /(?<script>.*\<script.*\<\/script\>)/gs.exec(srcCode);
     if (scriptMatched && scriptMatched.groups.script) {
       newContent = srcCode.replace(scriptMatched.groups.script, '');
     }
 
-    let document = parse(newContent);
+    const document = parse(newContent);
     return extractTranslationsFromAstNode(document.html, filePath);
   }
   catch (e) {
@@ -69,16 +70,16 @@ const extractComponentTranslations = async (filePath: string) : Promise<Translat
 }
 
 const initSourcesAndTargetsTranslations = (translations: any) : {sources:Record<string, string>, targets:Record<string, string>} => {
-    let sources : Record<string, string> = {};
-    let targets : Record<string, string> = {};
-    let groupedTranslations = lodash.groupBy(translations, t => t.id);
+    const sources : Record<string, string> = {};
+    const targets : Record<string, string> = {};
+    const groupedTranslations = lodash.groupBy(translations, t => t.id);
 
     let errors = [];
     Object.keys(groupedTranslations).forEach(key => {
       if (groupedTranslations[key].length > 1) {
         errors = [...errors, `\n\nMultiple translation found for id "${key}":`];
         groupedTranslations[key].forEach(t => {
-          errors = [...errors, `\n${getComponentNameFromPath(t.path)} with tag <${t.tag}> on in file ${t.componentPath}:${t.line}`];
+          errors = [...errors, `\n${getComponentNameFromPath(t.path)} with tag <${t.tag}> in file ${t.componentPath}:${t.start}-{t.end}`];
         })
       }
       
@@ -92,101 +93,32 @@ const initSourcesAndTargetsTranslations = (translations: any) : {sources:Record<
   return { sources, targets };
 }
 
-const getComponentNameFromPath = (filePath: string): string => {  
-  let paths = filePath.split('/');
-  return paths[paths.length - 1];
-}
-
-const extractTranslationsFromAstNode = (node: TemplateNode, componentPath: string) : Translation[] => {
-  let translations: Translation[] = [];
+const extractTranslationsFromAstNode = (node: TemplateNode, componentPath: string) : TranslationTag[] => {
+  let translations: TranslationTag[] = [];
   node.children.forEach(childNode => {
     try {
-      let i18nAttr = childNode.attributes ? childNode.attributes.find(a => a.name === "i18n" && a.type === "Action") : null;
+      const i18nAttr = childNode.attributes ? childNode.attributes.find(a => a.name === "i18n" && a.type === "Action") : null;
       if (i18nAttr) {        
-        let { id, dataKeys } = getIdAndObjectKeysFromAttribute(i18nAttr);        
-        let content = getNodeContent(childNode);        
+        const { id, dataKeys } = getIdAndObjectKeysFromAttribute(i18nAttr);        
+        const content = getNodeContent(childNode);        
         validateContentBindings(content, dataKeys);
-        translations = [...translations, { id: id, text: content, line: childNode.start, tag: childNode.name, path: componentPath }];     
+        translations = [...translations, { id: id, text: content, start: childNode.start, end:childNode.end, name: childNode.name, path: componentPath }];     
       }
       else if (childNode.children && childNode.children.length){      
         translations = [...translations, ...extractTranslationsFromAstNode(childNode, componentPath)];
       }
     }
     catch (e) {
-      console.error(e, ` on tag <${childNode.name}> at position: ${childNode.start} in component ${componentPath}.`);
+      console.error(e, ` on tag <${childNode.name}> in component ${componentPath}:${childNode.start}-{childNode.end}.`);
     }
   });
   
   return translations;
 }
 
-const getIdAndObjectKeysFromAttribute = (attr: Attribute) => {
-  let expression = attr.expression;
-  switch (expression.type)
-  {
-    case "CallExpression":
-      return getIdFromCallExpression(expression);
-    case "ObjectExpression":
-      return getIdFromObjectExpression(expression);
-    case "Literal":
-      return getIdFromLiteralExpression(expression);
-    default:
-      return { id: null, dataKeys: null };
-  }
-}
-
-const getIdFromCallExpression = (expression: { callee: { name: string; }; arguments: any[]; }) : IdKeys => {
-  if (expression.callee.name !== "def")
-    throw `You must use def function with use:i18n`;
-        
-  let idProperty = expression.arguments.find(a => a.type === "Literal");
-  let id = idProperty ? idProperty.value : "";
-  let dataKeys = [];
-
-  let dataProperty = expression.arguments.find(a => a.type === "ObjectExpression");
-  if (dataProperty) {
-    if (dataProperty.type !== "ObjectExpression") {
-      throw `You must specify data as object when using use:i18n={def("", {})}`;
-    }
-
-    dataKeys = dataProperty.properties.map(p => p.key.name);
-  }
-  
-  if (!id)
-    throw 'Id not found on use:i18n attribute';
-  
-  return { id, dataKeys };
-}
-
-const getIdFromObjectExpression = (expression: { properties: any[]; }): IdKeys => {
-  let idProperty = expression.properties.find(p => p.key.name === "id");
-  if (!idProperty) {
-    throw `You must specify id when using use:i18n={{id:""}}`;
-  }
-  
-  let id = idProperty.value.value;
-  let dataKeys = [];
-
-  let dataProperty = expression.properties.find(p => p.key.name === "data");
-  if (dataProperty) {
-    if (dataProperty.value.type !== "ObjectExpression") {
-      throw `You must specify data as object when using use:i18n={{id:"", data:{}}}`;
-    }
-
-    dataKeys = dataProperty.value.properties.map(p => p.key.name);
-  }
-  
-  if (!id)
-    throw 'Id not found on use:i18n attribute';
-
-  return { id, dataKeys };
-}
-
-const getIdFromLiteralExpression = (expression: { value: string }): IdKeys => {
-  if(!expression.value || expression.value.length < 1)
-    throw 'Id not found on use:i18n attribute';
-  
-  return { id: expression.value, dataKeys: [] };
+const getComponentNameFromPath = (filePath: string): string => {  
+  const paths = filePath.split('/');
+  return paths[paths.length - 1];
 }
 
 const getNodeContent = (childNode: TemplateNode): string => {
@@ -198,14 +130,14 @@ const getNodeContent = (childNode: TemplateNode): string => {
     throw `Tag <${childNode.name}> can only have text, element or simple mustache binding like {xxxx}`;
   }
 
-  let childNodes = childNode.children.filter(c => c.type === "Text" || c.type === "Element" || c.type === "MustacheTag");      
+  const childNodes = childNode.children.filter(c => c.type === "Text" || c.type === "Element" || c.type === "MustacheTag");      
   let content = "";
 
   childNodes.forEach(node => {
     content += getContentFromNodeType(node);
   });
   
-  content = content.replace(/\n/g, '').replace(/\t/g, '');
+  //content = content.replace(/\n/g, '').replace(/\t/g, '');
   return content;
 }
 
@@ -221,6 +153,8 @@ const getContentFromNodeType = (node: TemplateNode) : string => {
     case "MustacheTag":
       content += getMustacheTagContent(node);
       break;
+    default:
+      throw `Cannot retrieve node content, unsupported node type ${node.type}`;
   }
 
   return content;
@@ -238,12 +172,15 @@ const getMustacheTagContent = (mustache: TemplateNode): string => {
     content += mustache.expression.value;
   }
   else if (mustache.expression.type === "TemplateLiteral") {
-    let quasis = "";
+    let quasis = "{`";
     mustache.expression.quasis.filter(q => q.type === "TemplateElement").forEach(q => {
       quasis += q.value.raw;
     });
 
-    content += quasis;
+    content += (quasis + "`}");
+  }
+  else {
+    throw `Unsupported MustacheTag expression type ${mustache.expression.type}`;
   }
 
   return content;
@@ -282,23 +219,23 @@ const writeLanguagesTranslations = async (defaultLanguage: string, languages: st
     const targetTranslations = await updateExistingTargetTranslations(defaultLanguage, language, sourcesTranslations, initialTargetTranslations, translationsFolder, outputFormat);
 
     let res = null;
-      switch (outputFormat)
-      {
-        case "xlf":
-          res = await xliff.createxliff12(defaultLanguage, language, sourcesTranslations, targetTranslations, "svelte-translate");
-          break;
-        case "json":
-          res = JSON.stringify(await xliff.createjs(defaultLanguage, language, sourcesTranslations, targetTranslations, "svelte-translate"), null, 2);        
-          break;
-      }
+    switch (outputFormat)
+    {
+      case "xlf":
+        res = await xliff.createxliff12(defaultLanguage, language, sourcesTranslations, targetTranslations, "svelte-translate");
+        break;
+      case "json":
+        res = JSON.stringify(await xliff.createjs(defaultLanguage, language, sourcesTranslations, targetTranslations, "svelte-translate"), null, 2);        
+        break;
+    }
 
-      let folder = `${translationsFolder}`;
-      if (!fs.existsSync(folder)) {
-        fs.mkdirSync(folder);
-      }
+    const folder = `${translationsFolder}`;
+    if (!fs.existsSync(folder)) {
+      fs.mkdirSync(folder);
+    }
 
-      await fs.writeFile(`${folder}/messages.${language}.${outputFormat}`, res, 'utf-8');
-    });
+    await fs.writeFile(`${folder}/messages.${language}.${outputFormat}`, res, 'utf-8');
+  });
 }
 
 const updateExistingTargetTranslations = async (defaultLanguage:string, language:string, sourcesTranslations:Record<string, string>, initialTargetTranslations:Record<string, string>, translationsFolder:string, outputFormat:OutputFormat) : Promise<Record<string, string>> => {
@@ -306,8 +243,8 @@ const updateExistingTargetTranslations = async (defaultLanguage:string, language
     return { ...sourcesTranslations };
   }
   
-  let updatedTargets = { ...initialTargetTranslations };
-  let file = `${translationsFolder}/messages.${language}.${outputFormat}`;
+  const updatedTargets = { ...initialTargetTranslations };
+  const file = `${translationsFolder}/messages.${language}.${outputFormat}`;
   if (!fs.existsSync(file)) {
     return updatedTargets;
   }
@@ -326,7 +263,7 @@ const updateExistingTargetTranslations = async (defaultLanguage:string, language
   
   const existingTranslations = res.resources["svelte-translate"];
   Object.keys(updatedTargets).forEach(key => {
-    let existingTranslation = existingTranslations[key];
+    const existingTranslation = existingTranslations[key];
     if (existingTranslation && existingTranslation.target && existingTranslation.target.length > 0)
       updatedTargets[key] = existingTranslation.target;    
   });

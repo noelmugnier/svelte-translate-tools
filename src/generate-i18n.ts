@@ -1,7 +1,8 @@
 const fs = require("fs-extra");
 const glob = require("glob");
 const path = require("path");
-const xliff = require('xliff');
+
+import { loadTranslatedMessages } from "./helpers";
 import type { Generatei18nOptions, LanguageTranslations, OutputFormat } from "./types";
 
 export const generatei18n = async (options?: Generatei18nOptions):Promise<any> => {
@@ -18,7 +19,7 @@ export const generatei18n = async (options?: Generatei18nOptions):Promise<any> =
 /**
  * This will process .json/.xlf files to convert it to a keyvalue json object in destinationFolder.
  */
-const executeGeneration = async (options) : Promise<any> => {
+const executeGeneration = async (options : Generatei18nOptions) : Promise<any> => {
   console.log(`\nParsing messages files with format ${options.outputFormat} located in folder ${options.translationsFolder} folder and writting output in ${options.destinationFolder} folder.\n`);
 
   // get all .xlf/.json translation files
@@ -36,45 +37,53 @@ const executeGeneration = async (options) : Promise<any> => {
     let languagesTranslations: any = await Promise.all(files.map((filePath: string) => compileToTranslationFile(path.resolve(filePath), options.outputFormat)));
 
     //generate default language translation file
-    let defaultTranslations = await compileToTranslationFile(path.resolve(files[0]), options.outputFormat, "source");
+    const defaultTranslations = await compileToTranslationFile(path.resolve(files[0]), options.outputFormat, "source");
     languagesTranslations = [...languagesTranslations, defaultTranslations];
 
     //generate file for each language
-    let folder = `${options.destinationFolder}`;
-      if (!fs.existsSync(folder)) {
-        fs.mkdirSync(folder);
-      }
+    await writeTranslationsFiles(languagesTranslations, options);
+  });
+}
+
+const writeTranslationsFiles = async(languagesTranslations, options : Generatei18nOptions) => {
+  const folder = `${options.destinationFolder}`;
+  if (!fs.existsSync(folder)) {
+    fs.mkdirSync(folder);
+  }
     
-    languagesTranslations.forEach(async lt => {
-      await fs.writeFile(path.join(`${options.destinationFolder}/${lt.language}.json`), JSON.stringify(lt.translations, null, 2));
-    })
+  languagesTranslations.forEach(async (lt: { language: any; translations: any; }) => {
+    await fs.writeFile(path.join(`${options.destinationFolder}/${lt.language}.json`), JSON.stringify(lt.translations, null, 2));
   });
 }
 
 /**
- * Processes .xlf/.json file to generate a dedicated xx-XX.json translation file.
+ * Processes .xlf/.json file to generate a dedicated xx-XX.json translation object.
  */
-const compileToTranslationFile = async (filePath: string, outputFormat: OutputFormat, objProperty: "source" | "target" = "target"): Promise<LanguageTranslations> => {
-  const srcCode = await fs.readFile(filePath, { encoding: "utf-8" });
+const compileToTranslationFile = async (filePath: string, outputFormat: OutputFormat, sourceOrTarget: "source" | "target" = "target"): Promise<LanguageTranslations> => {
+  const translatedMessages = await loadTranslatedMessages(filePath, outputFormat);
+  const existingTranslations = translatedMessages.resources["svelte-translate"];
 
-  let res = null;
-  switch (outputFormat)
-    {
-      case "xlf":
-        res = await xliff.xliff12ToJs(srcCode);
-        break;
-      case "json":
-        res = JSON.parse(srcCode);
-        break;
-  }
-
-  let results = {};
-  const existingTranslations = res.resources["svelte-translate"];
+  const results = {};
   Object.keys(existingTranslations).forEach(key => {
-    let existingTranslation = existingTranslations[key];
-    if (existingTranslation && existingTranslation[objProperty] && existingTranslation[objProperty].length > 0)
-      results[key] = existingTranslation[objProperty];    
+    const existingTranslation = existingTranslations[key];
+    results[key] = getLanguageTranslation(existingTranslation, sourceOrTarget);
   });
 
-  return { language: (objProperty === "target" ? res.targetLanguage : res.sourceLanguage), translations: results };
+  return { language: (sourceOrTarget === "target" ? translatedMessages.targetLanguage : translatedMessages.sourceLanguage), translations: results };
+}
+
+const getLanguageTranslation = (existingTranslation: Record<string, string>, sourceOrTarget: "source" | "target" = "target") => {  
+  if (!existingTranslation || !existingTranslation[sourceOrTarget] || existingTranslation[sourceOrTarget].length < 1) {
+    return "";
+  }
+  
+  let sourceOrTargetTranslation = existingTranslation[sourceOrTarget];
+  sourceOrTargetTranslation = sourceOrTargetTranslation.replace(/\n/g, '').replace(/\t/g, '');
+      
+  let matched = /(?<start>\{\s*`).*(?<end>`\s*\})/gms.exec(sourceOrTargetTranslation);
+  if (matched && matched.groups.start) {
+    return sourceOrTargetTranslation.replace(matched.groups.start, '').replace(matched.groups.end, '');
+  }
+
+  return sourceOrTargetTranslation;
 }

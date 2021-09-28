@@ -8,7 +8,9 @@ export type Extracti18nOptions = {
 }
 
 export type Compilei18nOptions = {
-  languages?:string[],
+  language: string,
+  translationsFolder?: string,
+  outputFormat?: OutputFormat
 }
 
 export type OutputFormat = 'xlf' | 'json';
@@ -24,7 +26,7 @@ export type LanguageTranslations = {
     translations: Record<string, string>
 }
 
-export type Translation = { id: string, text: string, line: number, tag: string, path: string };
+export type TranslationTag = { id: string, text?: string, start: number, end:number, name: string, path: string };
 
 export type IdKeys = {
     id: string,

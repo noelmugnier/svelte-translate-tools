@@ -52,6 +52,7 @@ export default {
 		generatei18n(),
 		svelte({
 			preprocess: [			
+				preprocess_compilei18n({language:"fr-FR"}),
 				sveltePreprocess({ sourceMap: !production }),	
 			],
 			compilerOptions: {

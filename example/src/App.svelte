@@ -1,13 +1,13 @@
 <script lang="ts">
 	import {
 	  i18n,
+	  i18nFormat,
 	  def,
-	  TranslatedApp,
+	  PreTranslatedApp,
 	  i18nStore,
 	  getLocaleFromNavigator
 	} from "svelte-translate";
 	
-	import LanguageSelector from "./LanguageSelector.svelte";
 	
 	import enGB from './../public/lang/en-GB.json';
 	import frFR from './../public/lang/fr-FR.json';
@@ -18,11 +18,7 @@
 	i18nStore.addTranslations("fr-FR", frFR);
 </script>
 
-<TranslatedApp 
-	fallbackLanguage="fr-FR" 
-	initialLanguage={getLocaleFromNavigator()}
-	hideContentWhileLoading={true}>
-	<LanguageSelector/>
+<PreTranslatedApp>
 	<p use:i18n={def("app.title",{count, strong: chunks => `<strong>${chunks}</strong>`})}>
 		This is my <strong>default title</strong> with 
 		{`{count, plural, =0{no results} one{one result} other{# results}}`}
@@ -33,4 +29,4 @@
 	<button use:i18n={def("increase", {count})} on:click={() => count++}>
 		Increase {count}
 	</button>
-</TranslatedApp>
+</PreTranslatedApp>
