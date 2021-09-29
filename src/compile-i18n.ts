@@ -1,7 +1,7 @@
 const fs = require("fs-extra");
 const path = require("path");
 
-import { parse } from "svelte/compiler";
+const {parse} = require('svelte/compiler');
 import type { TemplateNode } from "svelte/types/compiler/interfaces";
 
 import { getIdAndObjectKeysFromAttribute, loadTranslatedMessages } from "./helpers";
