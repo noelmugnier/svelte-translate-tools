@@ -5,7 +5,7 @@ import type { Attribute } from "svelte/types/compiler/interfaces";
 
 import type { IdKeys, OutputFormat } from "./types";
 
-export const getIdAndObjectKeysFromAttribute = (attr: Attribute) => {
+export const getIdAndObjectKeysFromAttribute = (attr: Attribute) : IdKeys => {
   const expression = attr.expression;
   switch (expression.type)
   {
@@ -74,19 +74,14 @@ export const getIdFromLiteralExpression = (expression: { value: string }): IdKey
   return { id: expression.value, dataKeys: [] };
 }
 
-export const loadTranslatedMessages = async (path: string, outputFormat: OutputFormat) : Promise<any> => {
+export const loadTranslatedMessages = async (path: string, outputFormat: OutputFormat): Promise<any> => { 
   const srcCode = await fs.readFile(path, { encoding: "utf-8" });
-  let res = null;
   
   switch (outputFormat)
     {
       case "xlf":
-        res = await xliff.xliff12ToJs(srcCode);
-        break;
+        return await xliff.xliff12ToJs(srcCode);
       case "json":
-        res = JSON.parse(srcCode);
-        break;
+        return JSON.parse(srcCode);
   }
-
-  return res;
 }

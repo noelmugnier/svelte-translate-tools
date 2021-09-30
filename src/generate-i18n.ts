@@ -34,12 +34,12 @@ const executeGeneration = async (options : Generatei18nOptions) : Promise<any> =
       return;
     }
 
-    let languagesTranslations: any = await Promise.all(files.map((filePath: string) => compileToTranslationFile(path.resolve(filePath), options.outputFormat)));
+    let languagesTranslations: LanguageTranslations[] = await Promise.all(files.map((filePath: string) => compileToTranslationFile(path.resolve(filePath), options.outputFormat)));
 
     //generate default language translation file
     const defaultTranslations = await compileToTranslationFile(path.resolve(files[0]), options.outputFormat, "source");
     languagesTranslations = [...languagesTranslations, defaultTranslations];
-
+    
     //generate file for each language
     await writeTranslationsFiles(languagesTranslations, options);
   });
