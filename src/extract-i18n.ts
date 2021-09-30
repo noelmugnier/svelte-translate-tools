@@ -7,7 +7,7 @@ const xliff = require('xliff');
 import type { Attribute, TemplateNode } from "svelte/types/compiler/interfaces";
 
 import { getIdAndObjectKeysFromAttribute } from "./helpers";
-import type { Extracti18nOptions, IdKeys, OutputFormat, TranslationTag } from "./types";
+import type { Extracti18nOptions, IdKeys, OutputFormat, TranslationResources, TranslationTag } from "./types";
 
 export const extracti18n = async (options?: Extracti18nOptions) : Promise<any> => {
   if (!options)
@@ -43,9 +43,9 @@ const executeExtraction = async (options: Extracti18nOptions) : Promise<any> => 
     }
 
     const translations = await Promise.all(files.map((filePath: string) => extractComponentTranslations(path.resolve(filePath))));
-    const { sources, targets } = initSourcesAndTargetsTranslations(translations[0]);
+    const translationsResources = initSourcesAndTargetsTranslations(translations[0]);
     
-    await writeLanguagesTranslations(options.defaultLanguage, options.languages, sources, targets, options.translationsFolder, options.outputFormat);
+    await writeLanguagesTranslations(options.defaultLanguage, options.languages, translationsResources, options.translationsFolder, options.outputFormat);
   });
 }
 
@@ -69,9 +69,10 @@ const extractComponentTranslations = async (filePath: string) : Promise<Translat
   }
 }
 
-const initSourcesAndTargetsTranslations = (translations: any) : {sources:Record<string, string>, targets:Record<string, string>} => {
+const initSourcesAndTargetsTranslations = (translations: any) : TranslationResources => {
     const sources : Record<string, string> = {};
     const targets : Record<string, string> = {};
+    const notes : Record<string, string> = {};
     const groupedTranslations = lodash.groupBy(translations, t => t.id);
 
     let errors = [];
@@ -84,13 +85,14 @@ const initSourcesAndTargetsTranslations = (translations: any) : {sources:Record<
       }
       
       sources[key] = groupedTranslations[key][0].text;
+      notes[key] = groupedTranslations[key][0].description;
       targets[key] = "";
     });
     
     if (errors && errors.length)
       throw `Error(s) occured while extracting translations from svelte components: ${errors}\n`;
   
-  return { sources, targets };
+  return { sources, targets, notes };
 }
 
 const extractTranslationsFromAstNode = (node: TemplateNode, componentPath: string) : TranslationTag[] => {
@@ -99,10 +101,10 @@ const extractTranslationsFromAstNode = (node: TemplateNode, componentPath: strin
     try {
       const i18nAttr = childNode.attributes ? childNode.attributes.find(a => a.name === "i18n" && a.type === "Action") : null;
       if (i18nAttr) {        
-        const { id, dataKeys } = getIdAndObjectKeysFromAttribute(i18nAttr);        
+        const { id, dataKeys, description } = getIdAndObjectKeysFromAttribute(i18nAttr);        
         const content = getNodeContent(childNode);        
         validateContentBindings(content, dataKeys);
-        translations = [...translations, { id: id, text: content, start: childNode.start, end:childNode.end, name: childNode.name, path: componentPath }];     
+        translations = [...translations, { id: id, text: content, start: childNode.start, end:childNode.end, name: childNode.name, path: componentPath, description: description }];     
       }
       else if (childNode.children && childNode.children.length){      
         translations = [...translations, ...extractTranslationsFromAstNode(childNode, componentPath)];
@@ -211,21 +213,21 @@ const validateContentBindings = (content: string, dataKeys: string[]):void => {
     });
 }
 
-const writeLanguagesTranslations = async (defaultLanguage: string, languages: string[], sourcesTranslations: Record<string, string>, initialTargetTranslations:Record<string, string>, translationsFolder:string, outputFormat: OutputFormat) : Promise<any> => {
+const writeLanguagesTranslations = async (defaultLanguage: string, languages: string[], translationsResources: TranslationResources, translationsFolder:string, outputFormat: OutputFormat) : Promise<any> => {
   languages.forEach(async language => {
     if (defaultLanguage === language)
       return;
     
-    const targetTranslations = await updateExistingTargetTranslations(defaultLanguage, language, sourcesTranslations, initialTargetTranslations, translationsFolder, outputFormat);
+    const targetTranslations = await updateExistingTargetTranslations(defaultLanguage, language, translationsResources.sources, translationsResources.targets, translationsFolder, outputFormat);
 
     let res = null;
     switch (outputFormat)
     {
       case "xlf":
-        res = await xliff.createxliff12(defaultLanguage, language, sourcesTranslations, targetTranslations, "svelte-translate");
+        res = await xliff.createxliff12(defaultLanguage, language, translationsResources.sources, targetTranslations, "svelte-translate", null, translationsResources.notes);
         break;
       case "json":
-        res = JSON.stringify(await xliff.createjs(defaultLanguage, language, sourcesTranslations, targetTranslations, "svelte-translate"), null, 2);        
+        res = JSON.stringify(await xliff.createjs(defaultLanguage, language, translationsResources.sources, targetTranslations, "svelte-translate", null, translationsResources.notes), null, 2);        
         break;
     }
 
