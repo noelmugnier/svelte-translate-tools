@@ -19,7 +19,7 @@
 </script>
 
 <PreTranslatedApp>
-	<p use:i18n={def("app.title",{count, strong: chunks => `<strong>${chunks}</strong>`})}>
+	<p use:i18n={def("app.title",{count, strong: chunks => `<strong>${chunks}</strong>`}, "Corresponding to App.svelte's title")}>
 		This is my <strong>default title</strong> with 
 		{`{count, plural, =0{no results} one{one result} other{# results}}`}
 	</p> 

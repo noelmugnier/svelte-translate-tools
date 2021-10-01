@@ -51,6 +51,14 @@ export const compilei18n = (options:Compilei18nOptions): Readonly<{
               const translation = existingTranslations[t.id];
               if (translation) {
                 newContent = newContent.replace(translation.source, translation.target);
+
+                if (translation.note) {
+                  let regex = new RegExp(`use:i18n=.*(?<description>,\\s*"${translation.note.replace('.', '\\.')}"\\s*)\\)`);
+                  const { groups: { description } } = regex.exec(newContent);
+                  if (description) {
+                    newContent = newContent.replace(description, '');
+                  }
+                }
               }
             });
           
@@ -78,8 +86,8 @@ const extractTagsToReplaceFromAstNode = (node: TemplateNode, componentPath: stri
     try {
       let i18nAttr = childNode.attributes ? childNode.attributes.find(a => a.name === "i18n" && a.type === "Action") : null;
       if (i18nAttr) {        
-          const { id } = getIdAndObjectKeysFromAttribute(i18nAttr);
-          tags = [...tags, { id, end: childNode.end, start: childNode.start, path: componentPath, name: childNode.name}];             
+          const { id, description } = getIdAndObjectKeysFromAttribute(i18nAttr);
+          tags = [...tags, { id, end: childNode.end, start: childNode.start, path: componentPath, name: childNode.name, description}];             
       }
       else if (childNode.children && childNode.children.length){      
         tags = [...tags, ...extractTagsToReplaceFromAstNode(childNode, componentPath)];

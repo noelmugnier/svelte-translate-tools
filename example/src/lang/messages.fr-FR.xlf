@@ -9,6 +9,7 @@
         <target>
 		Ceci est un &lt;strong&gt;titre par defaut&lt;/strong&gt; avec 
 		{`{count, plural, =0{aucun résultat} one{un résultat} other{# résultats}}`}</target>
+        <note>Corresponding to App.svelte's title</note>
       </trans-unit>
       <trans-unit id="definition">
         <source>This is my default definition</source>

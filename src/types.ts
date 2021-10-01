@@ -26,9 +26,16 @@ export type LanguageTranslations = {
     translations: Record<string, string>
 }
 
-export type TranslationTag = { id: string, text?: string, start: number, end:number, name: string, path: string };
+export type TranslationTag = { id: string, text?: string, start: number, end:number, name: string, path: string, description?:string };
 
 export type IdKeys = {
     id: string,
-    dataKeys: string[]
+    dataKeys: string[],
+    description?:string
+}
+
+export type TranslationResources = {
+  sources: Record<string, string>,
+  targets: Record<string, string>,
+  notes: Record<string, string>
 }

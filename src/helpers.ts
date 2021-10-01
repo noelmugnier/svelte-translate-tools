@@ -24,11 +24,11 @@ export const getIdFromCallExpression = (expression: { callee: { name: string; };
   if (expression.callee.name !== "def")
     throw `You must use def function with use:i18n`;
         
-  const idProperty = expression.arguments.find(a => a.type === "Literal");
+  const idProperty = expression.arguments[0];
   const id = idProperty ? idProperty.value : "";
-  let dataKeys = [];
 
-  const dataProperty = expression.arguments.find(a => a.type === "ObjectExpression");
+  let dataKeys = [];
+  const dataProperty = expression.arguments[1];
   if (dataProperty) {
     if (dataProperty.type !== "ObjectExpression") {
       throw `You must specify data as object when using use:i18n={def("", {})}`;
@@ -36,11 +36,14 @@ export const getIdFromCallExpression = (expression: { callee: { name: string; };
 
     dataKeys = dataProperty.properties.map(p => p.key.name);
   }
+
+  const descriptionProperty = expression.arguments[2];
+  const description = descriptionProperty ? descriptionProperty.value : null;
   
   if (!id)
     throw 'Id not found on use:i18n attribute';
   
-  return { id, dataKeys };
+  return { id, dataKeys, description };
 }
 
 export const getIdFromObjectExpression = (expression: { properties: any[]; }): IdKeys => {
